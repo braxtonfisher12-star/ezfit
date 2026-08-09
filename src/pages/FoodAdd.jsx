@@ -27,6 +27,9 @@ export default function FoodAdd() {
   const [favoriteIds, setFavoriteIds] = useState(new Set());
   const [savedMeals, setSavedMeals] = useState([]);
   const [showCheck, setShowCheck] = useState(false);
+  const [selectedFood, setSelectedFood] = useState(null);
+  const [detailQtyNative, setDetailQtyNative] = useState(0);
+  const [displayUnit, setDisplayUnit] = useState("native");
 
   useEffect(() => {
     (async () => {
@@ -51,6 +54,30 @@ export default function FoodAdd() {
       setFavoriteIds((prev) => new Set(prev).add(realFood.id));
       setFavorites((prev) => [...prev, realFood]);
     }
+  };
+
+  const GRAMS_PER_OZ = 28.3495;
+
+  const openDetail = (food) => {
+    setSelectedFood(food);
+    setDetailQtyNative(food.serving_qty || 1);
+    setDisplayUnit("native");
+    setMode("detail");
+  };
+
+  const displayValue = () => {
+    if (!selectedFood) return 0;
+    return displayUnit === "oz" ? Math.round((detailQtyNative / GRAMS_PER_OZ) * 10) / 10 : Math.round(detailQtyNative * 10) / 10;
+  };
+
+  const onDisplayChange = (v) => {
+    const num = Number(v);
+    if (Number.isNaN(num)) return;
+    setDetailQtyNative(displayUnit === "oz" ? num * GRAMS_PER_OZ : num);
+  };
+
+  const toggleDisplayUnit = (unit) => {
+    setDisplayUnit(unit);
   };
 
   let searchDebounce;
@@ -82,7 +109,7 @@ export default function FoodAdd() {
 
   const ensureLocalFood = async (food) => {
     if (food.id && !String(food.id).startsWith("fdc:")) return food;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("foods")
       .insert({
         user_id: user.id,
@@ -100,36 +127,45 @@ export default function FoodAdd() {
       })
       .select()
       .single();
+    if (error) throw new Error(`Couldn't save this food: ${error.message}`);
     return data;
   };
 
   const addFoodToMeal = async (foodInput, quantity, source, confidence) => {
-    const food = await ensureLocalFood(foodInput);
-    let { data: meal } = await supabase
-      .from("meals")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("meal_date", targetDate)
-      .eq("logged_time", targetHour)
-      .maybeSingle();
-    if (!meal) {
-      const { data: newMeal } = await supabase
+    try {
+      const food = await ensureLocalFood(foodInput);
+      let { data: meal, error: mealFetchError } = await supabase
         .from("meals")
-        .insert({ user_id: user.id, meal_date: targetDate, logged_time: targetHour })
-        .select()
-        .single();
-      meal = newMeal;
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("meal_date", targetDate)
+        .eq("logged_time", targetHour)
+        .maybeSingle();
+      if (mealFetchError) throw new Error(`Couldn't check today's log: ${mealFetchError.message}`);
+      if (!meal) {
+        const { data: newMeal, error: mealInsertError } = await supabase
+          .from("meals")
+          .insert({ user_id: user.id, meal_date: targetDate, logged_time: targetHour })
+          .select()
+          .single();
+        if (mealInsertError) throw new Error(`Couldn't create today's log entry: ${mealInsertError.message}`);
+        meal = newMeal;
+      }
+      const { error: itemError } = await supabase.from("meal_items").insert({
+        meal_id: meal.id,
+        food_id: food.id,
+        quantity,
+        unit: food.serving_unit,
+        source,
+        ai_confidence: confidence ?? null,
+      });
+      if (itemError) throw new Error(`Couldn't add this food: ${itemError.message}`);
+      setShowCheck(true);
+      setTimeout(() => { setShowCheck(false); navigate("/food"); }, 550);
+    } catch (err) {
+      console.error("addFoodToMeal failed:", err);
+      alert(err.message || "Something went wrong adding this food. Please try again.");
     }
-    await supabase.from("meal_items").insert({
-      meal_id: meal.id,
-      food_id: food.id,
-      quantity,
-      unit: food.serving_unit,
-      source,
-      ai_confidence: confidence ?? null,
-    });
-    setShowCheck(true);
-    setTimeout(() => navigate("/food"), 550);
   };
 
   const applySavedMeal = async (savedMeal) => {
@@ -265,9 +301,9 @@ export default function FoodAdd() {
         {results.map((f) => (
           <Card tight key={f.id}>
             <div className="row">
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => openDetail(f)}>
                 <div style={{ fontSize: 13.5 }}>{f.name}{f.brand ? ` (${f.brand})` : ""}{f.state && f.state !== "n/a" ? ` — ${f.state}` : ""}</div>
-                <div className="muted" style={{ fontSize: 11 }}>{f.calories} kcal /{f.serving_qty}{f.serving_unit}</div>
+                <div className="muted" style={{ fontSize: 11 }}>{f.calories} kcal /{f.serving_qty}{f.serving_unit} · tap for details</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: 10 }}>
                 <button
@@ -292,6 +328,78 @@ export default function FoodAdd() {
             </div>
           </Card>
         ))}
+      </div>
+    );
+  }
+
+  if (mode === "detail" && selectedFood) {
+    const factor = selectedFood.serving_qty ? detailQtyNative / selectedFood.serving_qty : 1;
+    const macros = {
+      calories: Math.round((selectedFood.calories ?? 0) * factor),
+      protein_g: Math.round((selectedFood.protein_g ?? 0) * factor * 10) / 10,
+      carbs_g: Math.round((selectedFood.carbs_g ?? 0) * factor * 10) / 10,
+      fat_g: Math.round((selectedFood.fat_g ?? 0) * factor * 10) / 10,
+    };
+    const canToggleOz = selectedFood.serving_unit === "g";
+    const unitLabelText = displayUnit === "oz" ? "oz" : selectedFood.serving_unit;
+
+    return (
+      <div className="content">
+        <CheckOverlay />
+        <BackBtn onClick={() => setMode("search")} />
+        <div className="eyebrow">Logging to {slotLabel}</div>
+        <h1 className="pageTitle" style={{ fontSize: 20 }}>{selectedFood.name}</h1>
+        {selectedFood.brand && <p className="muted" style={{ marginTop: -8 }}>{selectedFood.brand}</p>}
+
+        <Card style={{ background: "var(--primary-tint)", borderColor: "var(--primary)" }}>
+          <div className="eyebrow" style={{ color: "var(--primary)" }}>Macro breakdown</div>
+          <div className="bigNum" style={{ fontSize: 30, color: "var(--primary-ink)", margin: "4px 0 10px" }}>{macros.calories} <span style={{ fontSize: 14, fontWeight: 500 }}>kcal</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            {[["Protein", macros.protein_g, "var(--protein)"], ["Carbs", macros.carbs_g, "var(--carbs)"], ["Fat", macros.fat_g, "var(--fat)"]].map(([label, val, color]) => (
+              <div key={label} style={{ textAlign: "center" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, margin: "0 auto 4px" }} />
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600 }}>{val}g</div>
+                <div className="muted" style={{ fontSize: 10.5 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {canToggleOz && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            {["native", "oz"].map((u) => (
+              <button
+                key={u}
+                onClick={() => toggleDisplayUnit(u)}
+                style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: displayUnit === u ? "1.5px solid var(--primary)" : "1px solid var(--border)", background: displayUnit === u ? "var(--primary-tint)" : "var(--surface)", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}
+              >
+                {u === "native" ? "Grams" : "Ounces"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="field">
+          <label>Amount ({unitLabelText})</label>
+          <input value={displayValue()} onChange={(e) => onDisplayChange(e.target.value)} inputMode="decimal" />
+        </div>
+
+        <div className="eyebrow">Quick amounts</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+          {[0.5, 1, 1.5, 2].map((mult) => (
+            <button
+              key={mult}
+              onClick={() => setDetailQtyNative((selectedFood.serving_qty || 1) * mult)}
+              style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontSize: 12.5 }}
+            >
+              {mult}×
+            </button>
+          ))}
+        </div>
+
+        <button className="btnPrimary" onClick={() => addFoodToMeal(selectedFood, detailQtyNative, selectedFood.external_source ? "search" : "recent")}>
+          Add to {targetHour}
+        </button>
       </div>
     );
   }
