@@ -263,13 +263,32 @@ export default function FoodAdd() {
           <div className="muted" style={{ fontSize: 13, marginTop: 8 }}>No results for "{query}". Try Quick Add instead.</div>
         )}
         {results.map((f) => (
-          <Card tight key={f.id} style={{ cursor: "pointer" }}>
+          <Card tight key={f.id}>
             <div className="row">
-              <span onClick={() => addFoodToMeal(f, f.serving_qty, f.external_source ? "search" : "recent")} style={{ flex: 1 }}>
-                {f.name}{f.brand ? ` (${f.brand})` : ""}{f.state && f.state !== "n/a" ? ` — ${f.state}` : ""}
-                <span className="muted" style={{ display: "block", fontSize: 11 }}>{f.calories} kcal /{f.serving_qty}{f.serving_unit}</span>
-              </span>
-              <button onClick={() => toggleFavorite(f)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: favoriteIds.has(f.id) ? "var(--warning)" : "var(--text-faint)" }}>★</button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5 }}>{f.name}{f.brand ? ` (${f.brand})` : ""}{f.state && f.state !== "n/a" ? ` — ${f.state}` : ""}</div>
+                <div className="muted" style={{ fontSize: 11 }}>{f.calories} kcal /{f.serving_qty}{f.serving_unit}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: 10 }}>
+                <button
+                  onClick={() => toggleFavorite(f)}
+                  aria-label="Favorite"
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: favoriteIds.has(f.id) ? "var(--warning)" : "var(--text-faint)", padding: 4 }}
+                >
+                  ★
+                </button>
+                <button
+                  onClick={() => addFoodToMeal(f, f.serving_qty, f.external_source ? "search" : "recent")}
+                  aria-label={`Add ${f.name}`}
+                  style={{
+                    width: 30, height: 30, borderRadius: "50%", border: "none", background: "var(--primary)",
+                    color: "#fff", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex",
+                    alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}
+                >
+                  +
+                </button>
+              </div>
             </div>
           </Card>
         ))}
