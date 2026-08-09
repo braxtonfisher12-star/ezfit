@@ -451,7 +451,7 @@ export default function FoodAdd() {
         <Card tight style={{ textAlign: "center", cursor: "pointer" }} onClick={() => fileInput.current.click()}>
           <div style={{ fontWeight: 600, fontSize: 13.5 }}>AI scan</div><div className="muted" style={{ fontSize: 11 }}>Photo of your meal</div>
         </Card>
-        <input ref={fileInput} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => e.target.files[0] && runAiScan(e.target.files[0])} />
+        <input ref={fileInput} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => e.target.files[0] && runAiScan(e.target.files[0])} />
         <Card tight style={{ textAlign: "center", cursor: "pointer" }} onClick={() => setMode("search")}>
           <div style={{ fontWeight: 600, fontSize: 13.5 }}>Search</div><div className="muted" style={{ fontSize: 11 }}>USDA database — 600k+ foods</div>
         </Card>
