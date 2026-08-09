@@ -18,6 +18,7 @@ export default function Today() {
   const { bodyMetric, recovery, macroTotals, todaysSession, cardioCalories, loading, reload } = useTodayData();
   const navigate = useNavigate();
   const [weightInput, setWeightInput] = useState("");
+  const [waistInput, setWaistInput] = useState("");
   const [stepsInput, setStepsInput] = useState("");
 
   const logWeight = async () => {
@@ -29,11 +30,27 @@ export default function Today() {
     reload();
   };
 
+  const logWaist = async () => {
+    if (!waistInput) return;
+    const today = new Date().toISOString().slice(0, 10);
+    await supabase.from("body_metrics").upsert({ user_id: user.id, metric_date: today, waist_in: Number(waistInput) });
+    setWaistInput("");
+    reload();
+  };
+
   const logSteps = async () => {
     if (!stepsInput) return;
     const today = new Date().toISOString().slice(0, 10);
-    await supabase.from("recovery_logs").upsert({ user_id: user.id, log_date: today, steps: Number(stepsInput) });
+    const newTotal = (recovery?.steps ?? 0) + Number(stepsInput);
+    await supabase.from("recovery_logs").upsert({ user_id: user.id, log_date: today, steps: newTotal });
     setStepsInput("");
+    reload();
+  };
+
+  const addStepsQuick = async (amount) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const newTotal = (recovery?.steps ?? 0) + amount;
+    await supabase.from("recovery_logs").upsert({ user_id: user.id, log_date: today, steps: newTotal });
     reload();
   };
 
@@ -107,25 +124,37 @@ export default function Today() {
         </Card>
 
         <Card>
-          <div style={{ display: "flex", gap: 22 }}>
+          <div style={{ display: "flex", gap: 16 }}>
             <div style={{ flex: 1 }}>
               <div className="eyebrow">Today's weight</div>
               {bodyMetric?.weight_lb ? (
-                <div className="bigNum" style={{ fontSize: 26 }}>{toDisplayWeight(bodyMetric.weight_lb, profile?.weight_unit ?? "lb")} <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-muted)" }}>{unitLabel(profile?.weight_unit ?? "lb")}</span></div>
+                <div className="bigNum" style={{ fontSize: 24 }}>{toDisplayWeight(bodyMetric.weight_lb, profile?.weight_unit ?? "lb")} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-muted)" }}>{unitLabel(profile?.weight_unit ?? "lb")}</span></div>
               ) : (
                 <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                  <input placeholder={unitLabel(profile?.weight_unit ?? "lb")} value={weightInput} onChange={(e) => setWeightInput(e.target.value)} style={{ width: 70, padding: 8, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }} />
-                  <button className="btnGhost" style={{ width: "auto", padding: "8px 12px" }} onClick={logWeight}>Log</button>
+                  <input placeholder={unitLabel(profile?.weight_unit ?? "lb")} value={weightInput} onChange={(e) => setWeightInput(e.target.value)} style={{ width: 62, padding: 8, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }} />
+                  <button className="btnGhost" style={{ width: "auto", padding: "8px 10px" }} onClick={logWeight}>Log</button>
                 </div>
               )}
             </div>
             <div style={{ flex: 1 }}>
+              <div className="eyebrow">Waist</div>
+              {bodyMetric?.waist_in ? (
+                <div className="bigNum" style={{ fontSize: 24 }}>{bodyMetric.waist_in} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-muted)" }}>in</span></div>
+              ) : (
+                <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                  <input placeholder="in" value={waistInput} onChange={(e) => setWaistInput(e.target.value)} style={{ width: 62, padding: 8, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }} />
+                  <button className="btnGhost" style={{ width: "auto", padding: "8px 10px" }} onClick={logWaist}>Log</button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="divider" />
+          <div style={{ flex: 1 }}>
               <div className="eyebrow">Sleep</div>
               <div className="bigNum" style={{ fontSize: 26 }}>
                 {recovery?.sleep_minutes ? `${Math.floor(recovery.sleep_minutes / 60)}h ${recovery.sleep_minutes % 60}m` : "—"}
               </div>
             </div>
-          </div>
         </Card>
 
         {todaysSession ? (
@@ -149,12 +178,15 @@ export default function Today() {
         <Card>
           <div className="row"><span className="eyebrow" style={{ margin: 0 }}>Steps</span><span className="muted" style={{ fontFamily: "var(--font-mono)" }}>{steps} / {stepGoal}</span></div>
           <div className="progressTrack" style={{ marginTop: 8 }}><div className="progressFill" style={{ width: `${pct(steps, stepGoal)}%`, background: "var(--success)" }} /></div>
-          {steps === 0 && (
-            <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-              <input placeholder="Enter today's steps" value={stepsInput} onChange={(e) => setStepsInput(e.target.value)} style={{ flex: 1, padding: 8, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }} />
-              <button className="btnGhost" style={{ width: "auto", padding: "8px 12px" }} onClick={logSteps}>Log</button>
-            </div>
-          )}
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            {[500, 1000, 2500].map((amt) => (
+              <button key={amt} className="btnGhost" style={{ flex: 1, padding: "8px 0", fontSize: 12 }} onClick={() => addStepsQuick(amt)}>+{amt}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <input placeholder="Add steps" value={stepsInput} onChange={(e) => setStepsInput(e.target.value)} inputMode="numeric" style={{ flex: 1, padding: 8, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }} />
+            <button className="btnGhost" style={{ width: "auto", padding: "8px 12px" }} onClick={logSteps}>Add</button>
+          </div>
         </Card>
 
         <Card>

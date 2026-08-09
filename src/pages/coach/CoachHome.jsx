@@ -16,6 +16,7 @@ import { runWeeklyReviewNow } from "../../lib/runWeeklyReview";
 import { checkNewMilestones } from "../../lib/milestones";
 import { showLocalNotification } from "../../lib/notifications";
 import { toISODate } from "../../lib/dateUtils";
+import { computePace } from "../../lib/paceCalc";
 
 function longestStreak(dates) {
   if (!dates.length) return 0;
@@ -49,6 +50,7 @@ export default function CoachHome() {
   const [loading, setLoading] = useState(true);
   const [heatmapData, setHeatmapData] = useState(null);
   const [milestoneQueue, setMilestoneQueue] = useState([]);
+  const [currentWeightLb, setCurrentWeightLb] = useState(null);
 
   const load = async () => {
     const { data: assignments } = await supabase.from("workout_day_assignments").select("*, workout_templates(name)").eq("user_id", user.id);
@@ -63,7 +65,6 @@ export default function CoachHome() {
     const { data: h } = await supabase.from("weekly_reviews").select("*").eq("user_id", user.id).order("week_start", { ascending: true }).limit(8);
     setHistory(h ?? []);
 
-    // Lifetime journey stats
     const [{ data: allMetrics }, { data: completedSessions }, { data: allReviews }] = await Promise.all([
       supabase.from("body_metrics").select("weight_lb, metric_date").eq("user_id", user.id).not("weight_lb", "is", null).order("metric_date"),
       supabase.from("workout_sessions").select("session_date").eq("user_id", user.id).eq("status", "complete"),
@@ -71,6 +72,7 @@ export default function CoachHome() {
     ]);
     const first = allMetrics?.[0]?.weight_lb;
     const latest = allMetrics?.[allMetrics.length - 1]?.weight_lb;
+    setCurrentWeightLb(latest ?? null);
     const weekSet = new Set((completedSessions ?? []).map((s) => {
       const d = new Date(s.session_date);
       const jan1 = new Date(d.getFullYear(), 0, 1);
@@ -83,7 +85,6 @@ export default function CoachHome() {
       totalOverloadLb: Math.round((allReviews ?? []).reduce((sum, r) => sum + (r.progressive_overload_lb ?? 0), 0)),
     });
 
-    // Compliance heatmap: last 70 days of weight/food/step logging
     const seventyDaysAgo = new Date();
     seventyDaysAgo.setDate(seventyDaysAgo.getDate() - 70);
     const seventyAgoISO = toISODate(seventyDaysAgo);
@@ -98,7 +99,6 @@ export default function CoachHome() {
       stepsDates: new Set((stepRows ?? []).map((r) => r.log_date)),
     });
 
-    // Milestones: check journey stats against thresholds, celebrate any new ones
     const journeyForMilestones = {
       totalChangeLb: first && latest ? Math.round((latest - first) * 10) / 10 : 0,
       weeksTrained: weekSet.size,
@@ -113,8 +113,6 @@ export default function CoachHome() {
       setMilestoneQueue(newMilestones);
     }
 
-    // Notification: fire once per unviewed review (guarded via localStorage
-    // so it doesn't refire on every page load/render).
     if (latestReview && !latestReview.viewed_at) {
       const notifiedKey = `ezfit-notified-${latestReview.id}`;
       if (!localStorage.getItem(notifiedKey)) {
@@ -137,6 +135,16 @@ export default function CoachHome() {
 
   const meta = review ? STATE_META[review.decision_state] ?? STATE_META.gray : null;
   const uniqueTemplates = [...new Map(templates.map((t) => [t.template_id, t])).values()];
+
+  const pace = profile?.goal_weight_lb
+    ? computePace({
+        goalStartWeightLb: profile.goal_start_weight_lb,
+        goalStartDate: profile.goal_start_date,
+        goalWeightLb: profile.goal_weight_lb,
+        goalRateLbPerWeek: profile.goal_rate_lb_per_week,
+        currentWeightLb,
+      })
+    : null;
 
   const weightSeries = history.map((h) => h.avg_weight_lb).filter((v) => v != null);
   const waistSeries = history.map((h) => h.avg_waist_in).filter((v) => v != null);
@@ -185,8 +193,6 @@ export default function CoachHome() {
 
   if (loading) return <div className="content">Loading…</div>;
 
-  // Review-ready takeover: if the latest review hasn't been viewed yet, the
-  // whole screen becomes the "tap to view" moment instead of the dashboard.
   if (review && !review.viewed_at) {
     return (
       <div style={{ position: "fixed", inset: 0, background: "linear-gradient(135deg, var(--primary) 0%, #4A63FF 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 22 }}>
@@ -322,6 +328,23 @@ export default function CoachHome() {
             <span style={{ color: "var(--primary)", fontSize: 13, fontWeight: 600 }}>{profile?.goal_weight_lb ? "Edit" : "Set →"}</span>
           </div>
         </Card>
+
+        {pace && (
+          <Card style={{
+            background: pace.status === "ahead" ? "var(--success-tint)" : pace.status === "behind" ? "var(--warning-tint)" : "var(--surface-2)",
+            borderColor: pace.status === "ahead" ? "var(--success)" : pace.status === "behind" ? "var(--warning)" : "var(--border)",
+          }}>
+            <div className="row">
+              <div>
+                <div className="eyebrow" style={{ margin: 0, color: pace.status === "ahead" ? "var(--success)" : pace.status === "behind" ? "var(--warning)" : "var(--text-muted)" }}>Pace</div>
+                <p style={{ fontWeight: 700, fontSize: 15, margin: "2px 0" }}>
+                  {pace.status === "ahead" ? `Ahead of pace by ${pace.diffLb} lb` : pace.status === "behind" ? `Behind pace by ${pace.diffLb} lb` : "Right on pace"}
+                </p>
+              </div>
+              <span className="muted" style={{ fontSize: 11.5 }}>Expected {pace.expectedWeight} lb</span>
+            </div>
+          </Card>
+        )}
 
         <div style={{ display: "flex", gap: 8 }}>
           <Card onClick={() => navigate("/train")} style={{ cursor: "pointer", flex: 1, background: "var(--primary-tint)", borderColor: "var(--border)" }}>

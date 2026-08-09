@@ -11,7 +11,7 @@ import { useProfile } from "../hooks/useProfile";
 import { useAuth } from "../lib/auth";
 import { supabase } from "../lib/supabaseClient";
 import { pct } from "../lib/nutritionMath";
-import { toISODate, dayLabel, formatHourSlot, slotKey } from "../lib/dateUtils";
+import { toISODate, dayLabel, formatHourSlot, slotKey, HOUR_SLOTS } from "../lib/dateUtils";
 import { useCountUp } from "../lib/useCountUp";
 
 function addDays(iso, n) {
@@ -72,9 +72,7 @@ export default function Food() {
   const prevDayISO = addDays(selected, -1);
   const prevTotals = totalsForDate(prevDayISO);
 
-  const occupiedHours = [...new Set(dayMeals.filter((m) => m.logged_time).map((m) => Number(m.logged_time.slice(0, 2))))].sort((a, b) => a - b);
-
-  const mealForHour = (hour) => dayMeals.find((m) => Number((m.logged_time ?? "").slice(0, 2)) === hour);
+  const mealForHour = (hour) => dayMeals.find((m) => Number((m.logged_time ?? "").slice(0, 2)) === hour % 24);
   const itemsForHour = (hour) => mealForHour(hour)?.meal_items ?? [];
 
   const deleteItem = async (itemId) => {
@@ -191,55 +189,50 @@ export default function Food() {
         </div>
 
         <div className="eyebrow" style={{ marginTop: 4 }}>Timeline</div>
-        {occupiedHours.length === 0 ? (
-          <Card style={{ textAlign: "center", padding: "32px 16px" }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" style={{ margin: "0 auto 10px", opacity: 0.35 }}>
-              <path d="M6 3v8a3 3 0 0 0 3 3v7M6 3v6M8 3v6M4 3v6M17 3c-2 1-2.5 4-2.5 6 0 2 1 3 2.5 3v9" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <div className="muted" style={{ marginBottom: 10 }}>Nothing logged yet {selected === toISODate(new Date()) ? "today" : "this day"}.</div>
-            <button className="btnGhost" onClick={() => navigate("/food/add")}>Log something</button>
-          </Card>
-        ) : (
-          <div style={{ position: "relative", paddingLeft: 8 }}>
-            <div style={{ position: "absolute", left: 34, top: 6, bottom: 6, width: 1.5, background: "var(--border)" }} />
-            {occupiedHours.map((hour) => {
-              const items = itemsForHour(hour);
-              return (
-                <div key={hour} style={{ display: "flex", gap: 10, marginBottom: 10, position: "relative", background: hourTint(hour), borderRadius: 12, padding: "4px 2px" }}>
-                  <div style={{ width: 44, flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-faint)", paddingTop: 10, position: "relative", zIndex: 1 }}>
-                    {formatHourSlot(hour)}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div className="row" style={{ marginBottom: 3 }}>
-                      <span className="muted" style={{ fontSize: 10 }} />
-                      <button onClick={() => saveAsMeal(hour)} style={{ background: "none", border: "none", color: "var(--primary)", fontSize: 10.5, cursor: "pointer", padding: 0 }}>Save as meal</button>
-                    </div>
-                    {items.map((it) => (
-                      <SwipeToDelete key={it.id} onDelete={() => deleteItem(it.id)}>
-                        <div
-                          onClick={() => navigate("/food/add", { state: { date: selected, hour: slotKey(hour) } })}
-                          style={{ cursor: "pointer", padding: "9px 12px", borderLeft: `3px solid ${dominantMacroColor(it)}`, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, marginBottom: 6 }}
-                        >
-                          <div className="row" style={{ fontSize: 13 }}>
-                            <span>{it.food?.name}</span>
-                            <span className="muted">{Math.round((it.food?.calories ?? 0) * (it.food?.serving_qty ? it.quantity / it.food.serving_qty : 1))} kcal</span>
-                          </div>
-                        </div>
-                      </SwipeToDelete>
-                    ))}
-                  </div>
+        <div style={{ position: "relative", paddingLeft: 8 }}>
+          <div style={{ position: "absolute", left: 34, top: 6, bottom: 6, width: 1.5, background: "var(--border)" }} />
+          {HOUR_SLOTS.map((hour) => {
+            const items = itemsForHour(hour);
+            const hasItems = items.length > 0;
+            return (
+              <div key={hour} style={{ display: "flex", gap: 10, marginBottom: 10, position: "relative", background: hourTint(hour), borderRadius: 12, padding: "4px 2px" }}>
+                <div style={{ width: 44, flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-faint)", paddingTop: 10, position: "relative", zIndex: 1 }}>
+                  {formatHourSlot(hour)}
                 </div>
-              );
-            })}
-            <button
-              onClick={() => navigate("/food/add", { state: { date: selected, hour: `${String(new Date().getHours()).padStart(2, "0")}:00` } })}
-              className="btnGhost"
-              style={{ marginTop: 6 }}
-            >
-              + Log more food
-            </button>
-          </div>
-        )}
+                <div style={{ flex: 1 }}>
+                  {hasItems ? (
+                    <>
+                      <div className="row" style={{ marginBottom: 3 }}>
+                        <span className="muted" style={{ fontSize: 10 }} />
+                        <button onClick={() => saveAsMeal(hour)} style={{ background: "none", border: "none", color: "var(--primary)", fontSize: 10.5, cursor: "pointer", padding: 0 }}>Save as meal</button>
+                      </div>
+                      {items.map((it) => (
+                        <SwipeToDelete key={it.id} onDelete={() => deleteItem(it.id)}>
+                          <div
+                            onClick={() => navigate("/food/add", { state: { date: selected, hour: slotKey(hour) } })}
+                            style={{ cursor: "pointer", padding: "9px 12px", borderLeft: `3px solid ${dominantMacroColor(it)}`, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, marginBottom: 6 }}
+                          >
+                            <div className="row" style={{ fontSize: 13 }}>
+                              <span>{it.food?.name}</span>
+                              <span className="muted">{Math.round((it.food?.calories ?? 0) * (it.food?.serving_qty ? it.quantity / it.food.serving_qty : 1))} kcal</span>
+                            </div>
+                          </div>
+                        </SwipeToDelete>
+                      ))}
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => navigate("/food/add", { state: { date: selected, hour: slotKey(hour) } })}
+                      style={{ width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 10, border: "1px dashed var(--border)", background: "transparent", color: "var(--text-faint)", fontSize: 12.5, cursor: "pointer" }}
+                    >
+                      + Log food
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
         <Card style={{ marginTop: 16 }}>
           <div className="eyebrow">This week</div>

@@ -60,6 +60,8 @@ export default function GoalSetup() {
       goal_weight_lb: targetWeight,
       goal_rate_lb_per_week: rate,
       goal_target_date: projection.targetDate.toISOString().slice(0, 10),
+      goal_start_weight_lb: currentWeight,
+      goal_start_date: new Date().toISOString().slice(0, 10),
       goal: isLoss ? "lose_fat" : "build_muscle",
     });
     await saveTargets({ calories, protein_g, carbs_g, fat_g, reason: `Coach-calculated from goal: ${currentWeight} → ${targetWeight} lb at ${rate} lb/week` });
