@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Card, Pill } from "../components/Card";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/auth";
-import { toISODate } from "../lib/dateUtils";
+import { toISODate, formatHourSlot } from "../lib/dateUtils";
 
 export default function FoodAdd() {
   const { user } = useAuth();
@@ -233,7 +233,7 @@ export default function FoodAdd() {
     reader.readAsDataURL(file);
   };
 
-  const slotLabel = `${targetDate} · ${targetHour}`;
+  const slotLabel = `${targetDate} · ${formatHourSlot(Number(targetHour.slice(0, 2)))}`;
   const BackBtn = ({ onClick }) => (
     <button onClick={onClick} style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 13, cursor: "pointer", padding: 0, marginBottom: 10 }}>&larr; Back</button>
   );
@@ -275,7 +275,7 @@ export default function FoodAdd() {
             addFoodToMeal(food, 1, "ai_scan", "medium");
           }}
         >
-          Add to {targetHour}
+          Add to {formatHourSlot(Number(targetHour.slice(0, 2)))}
         </button>
       </div>
     );
@@ -398,7 +398,7 @@ export default function FoodAdd() {
         </div>
 
         <button className="btnPrimary" onClick={() => addFoodToMeal(selectedFood, detailQtyNative, selectedFood.external_source ? "search" : "recent")}>
-          Add to {targetHour}
+          Add to {formatHourSlot(Number(targetHour.slice(0, 2)))}
         </button>
       </div>
     );
@@ -417,7 +417,7 @@ export default function FoodAdd() {
           <Card style={{ marginTop: 12 }}>
             <div style={{ fontWeight: 600 }}>{barcodeResult.name}{barcodeResult.brand ? ` — ${barcodeResult.brand}` : ""}</div>
             <div className="muted" style={{ fontSize: 12, margin: "4px 0 10px" }}>{barcodeResult.calories} kcal · {barcodeResult.protein_g}g protein</div>
-            <button className="btnPrimary" onClick={() => addFoodToMeal({ ...barcodeResult, id: `fdc:${barcodeResult.external_id}` }, barcodeResult.serving_qty, "barcode")}>Add to {targetHour}</button>
+            <button className="btnPrimary" onClick={() => addFoodToMeal({ ...barcodeResult, id: `fdc:${barcodeResult.external_id}` }, barcodeResult.serving_qty, "barcode")}>Add to {formatHourSlot(Number(targetHour.slice(0, 2)))}</button>
           </Card>
         )}
       </div>
