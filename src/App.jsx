@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useState } from "react";
 import { useAuth } from "./lib/auth";
 import { useProfile } from "./hooks/useProfile";
+import { toISODate } from "./lib/dateUtils";
+import MorningCheckIn from "./components/MorningCheckIn";
 
 import SignIn from "./pages/SignIn";
 import Onboarding from "./pages/onboarding/Onboarding";
@@ -40,9 +43,20 @@ function Gate({ children }) {
 }
 
 export default function App() {
+  const { user } = useAuth();
+  const { profile } = useProfile();
+  const morningKey = `ezfit-morning-${toISODate(new Date())}`;
+  const [showMorning, setShowMorning] = useState(() => typeof window !== "undefined" && localStorage.getItem(morningKey) !== "shown");
+
+  const dismissMorning = () => {
+    localStorage.setItem(morningKey, "shown");
+    setShowMorning(false);
+  };
+
   return (
     <BrowserRouter>
       <div className="app">
+        {user && profile?.onboarded && showMorning && <MorningCheckIn onDone={dismissMorning} />}
         <Routes>
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/onboarding" element={<Onboarding />} />
