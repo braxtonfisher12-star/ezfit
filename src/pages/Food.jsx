@@ -59,6 +59,7 @@ export default function Food() {
   const { week, mealsByDate, totalsForDate, cardioForDate, loading, reload } = useWeekFood();
   const [selected, setSelected] = useState(toISODate(new Date()));
   const [copying, setCopying] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
   const navigate = useNavigate();
 
   const baseCalTarget = targets?.calories ?? 2200;
@@ -166,9 +167,7 @@ export default function Food() {
             {cardioToday > 0 && <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, background: "rgba(255,255,255,0.2)", padding: "3px 8px", borderRadius: 99 }}>+{cardioToday} kcal cardio</span>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 8 }}>
-            <div style={{ background: "rgba(255,255,255,0.94)", borderRadius: "50%" }}>
-              <MacroDonut proteinG={totals.protein_g} carbsG={totals.carbs_g} fatG={totals.fat_g} size={110} strokeWidth={13} />
-            </div>
+            <MacroDonut proteinG={totals.protein_g} carbsG={totals.carbs_g} fatG={totals.fat_g} size={110} strokeWidth={13} light />
             <div style={{ flex: 1 }}>
               <div className="count-up" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 30 }}>{animatedCalories}<span style={{ fontSize: 14, opacity: 0.75, fontWeight: 500 }}> / {calTarget} kcal</span></div>
               {[
